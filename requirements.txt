@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+selenium
+webdriver-manager
+pandas
+beautifulsoup4
+openpyxl
+requests
+python-dotenv
+openai
