@@ -8,4 +8,6 @@ openpyxl
 requests
 python-dotenv
 openai
+chromedriver-autoinstaller
+undetected-chromedriver
 gunicorn
