@@ -28,10 +28,53 @@ class ChatResponse(BaseModel):
 async def start_scrape():
     """Run the BrightMLS scraper and save CSV."""
     try:
+        print("🚀 Starting BrightMLS scraper...")
         result = run_brightmls_scraper()
-        return result
+        
+        if result['success']:
+            print(f"✅ Scraper completed successfully: {result['message']}")
+            return {
+                "status": "success",
+                "message": result['message'],
+                "row_count": result['row_count'],
+                "new_data": result['new_data'],
+                "timestamp": result['timestamp']
+            }
+        else:
+            print(f"❌ Scraper failed: {result['message']}")
+            return {
+                "status": "error",
+                "message": result['message'],
+                "row_count": result['row_count'],
+                "new_data": result['new_data'],
+                "timestamp": result['timestamp']
+            }
+    except KeyboardInterrupt:
+        print("🛑 Scraper interrupted by user")
+        return {
+            "status": "interrupted",
+            "message": "Scraper was interrupted by user",
+            "row_count": 0,
+            "new_data": False,
+            "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
     except Exception as e:
+        print(f"❌ Fatal scraper error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Scraper error: {str(e)}")
+
+@app.post("/stop")
+async def stop_scraper():
+    """Stop the running scraper process."""
+    try:
+        # This is a placeholder - in a real implementation you'd need to track the scraper process
+        # For now, we'll just return a message indicating the endpoint exists
+        return {
+            "status": "stopped",
+            "message": "Scraper stop requested. Note: This endpoint is a placeholder - implement process tracking for full functionality.",
+            "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error stopping scraper: {str(e)}")
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_with_csv(request: ChatRequest):
