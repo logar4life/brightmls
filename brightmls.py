@@ -1,6 +1,8 @@
 import time
 import csv
 import os
+import signal
+import sys
 import pandas as pd
 import hashlib
 from datetime import datetime
@@ -16,6 +18,19 @@ from selenium.webdriver.common.action_chains import ActionChains
 from bs4 import BeautifulSoup
 from selenium.webdriver.support.ui import Select
 from selenium.common.exceptions import StaleElementReferenceException
+
+# Global variable to track if scraper should stop
+scraper_should_stop = False
+
+def signal_handler(signum, frame):
+    """Handle interrupt signals to gracefully stop the scraper"""
+    global scraper_should_stop
+    print(f"\n🛑 Received signal {signum}. Stopping scraper gracefully...")
+    scraper_should_stop = True
+
+# Register signal handlers
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 # === Credentials ===
 USERNAME = "najibm1983"
@@ -220,12 +235,25 @@ def perform_search(driver, wait):
         print(f"❌ Error performing search: {e}")
         return False
 
-def scrape_all_pages(driver, wait, max_pages=200):
+def scrape_all_pages(driver, wait, max_pages=200, timeout_minutes=30):
     """Scrape up to max_pages of the results table and save each page's data in real time to CSV."""
     all_data = []
     headers = None
     page_num = 1
+    start_time = time.time()
+    timeout_seconds = timeout_minutes * 60
+    
     while page_num <= max_pages:
+        # Check for timeout
+        if time.time() - start_time > timeout_seconds:
+            print(f"⏰ Timeout reached ({timeout_minutes} minutes). Stopping scraper.")
+            break
+            
+        # Check for stop signal
+        if scraper_should_stop:
+            print("🛑 Stop signal received. Stopping scraper.")
+            break
+            
         print(f"\n🔄 Scraping page {page_num}...")
         data, page_headers = scrape_data(driver, wait)
         if not data:
@@ -268,9 +296,27 @@ def scrape_all_pages(driver, wait, max_pages=200):
 
 def run_brightmls_scraper():
     """Run the scraping process and return a result dictionary."""
-    # Setup Chrome driver
+    # Setup Chrome driver with enhanced headless options
     options = Options()
-    options.headless = True  # Set to True for headless mode
+    options.add_argument("--headless=new")  # Use new headless mode
+    options.add_argument("--no-sandbox")  # Disable sandbox for better compatibility
+    options.add_argument("--disable-dev-shm-usage")  # Disable shared memory usage
+    options.add_argument("--disable-gpu")  # Disable GPU hardware acceleration
+    options.add_argument("--window-size=1920,1080")  # Set window size for consistent rendering
+    options.add_argument("--disable-extensions")  # Disable extensions
+    options.add_argument("--disable-plugins")  # Disable plugins
+    options.add_argument("--disable-images")  # Disable images for faster loading
+    options.add_argument("--disable-blink-features=AutomationControlled")  # Hide automation
+    options.add_argument("--disable-web-security")  # Disable web security
+    options.add_argument("--allow-running-insecure-content")  # Allow insecure content
+    options.add_argument("--disable-features=VizDisplayCompositor")  # Disable display compositor
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])  # Hide automation
+    options.add_experimental_option('useAutomationExtension', False)  # Disable automation extension
+    options.add_experimental_option("prefs", {
+        "profile.default_content_setting_values.notifications": 2,  # Disable notifications
+        "profile.default_content_settings.popups": 0,  # Disable popups
+    })
+    
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     wait = WebDriverWait(driver, 20)
     result = {
@@ -325,6 +371,10 @@ def run_brightmls_scraper():
     except KeyboardInterrupt:
         print("\n🛑 Script interrupted by user")
         result['message'] = "🛑 Script interrupted by user"
+        return result
+    except SystemExit:
+        print("\n🛑 Script stopped by system")
+        result['message'] = "🛑 Script stopped by system"
         return result
     except Exception as e:
         print(f"❌ Fatal error: {e}")
